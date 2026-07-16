@@ -202,7 +202,8 @@ end; $$;
 -- ============================================================================
 --  MONTHLY ROLL-UP VIEW — mirrors the Master Sheet
 -- ============================================================================
-create or replace view public.v_monthly as
+create or replace view public.v_monthly
+with (security_invoker = true) as
 with inc as (
   select owner_id, month, sum(expected) as expected_in, sum(received) as received_in
   from public.income_entries group by owner_id, month
