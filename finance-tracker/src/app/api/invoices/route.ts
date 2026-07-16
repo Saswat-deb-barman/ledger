@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
-import { finYear } from "@/lib/format";
+import { finYear, todayIST } from "@/lib/format";
 
 // POST /api/invoices — creates an invoice with a gap-free, per-context number.
 export async function POST(req: Request) {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
   if (!prefix) return NextResponse.json({ error: "prefix required" }, { status: 400 });
 
-  const fy = finYear(issue_date ? new Date(issue_date) : new Date());
+  const fy = finYear(issue_date ? new Date(issue_date) : undefined);
 
   // 1) Reserve the next number atomically (RPC locks the counter row).
   const { data: num, error: numErr } = await supabase
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     prefix,
     client_id, project_id,
     status: "draft",
-    issue_date: issue_date ?? new Date().toISOString().slice(0, 10),
+    issue_date: issue_date ?? todayIST(),
     due_date,
     subtotal, discount, tax_rate, tax_amount, total,
     billed_by, bank_details, notes, terms,
