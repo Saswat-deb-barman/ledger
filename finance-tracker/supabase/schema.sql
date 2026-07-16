@@ -163,10 +163,18 @@ create table public.invoice_counters (
 );
 
 create or replace function public.next_invoice_number(p_prefix text, p_fin_year text)
-returns table (invoice_number text, seq int, fin_year text)
+returns table (invoice_number text, seq int, out_fin_year text)
 language plpgsql security definer set search_path = public as $$
 declare v_uid uuid := auth.uid(); v_seq int;
 begin
+  -- RETURNS TABLE columns become implicit plpgsql variables for the whole
+  -- function body, so naming one `fin_year` collided with
+  -- invoice_counters.fin_year everywhere that column is referenced
+  -- unqualified below — including the ON CONFLICT target list, which (unlike
+  -- an INSERT column list) is parsed as expressions and so is also subject
+  -- to plpgsql's ambiguous-variable resolution ("column reference \"fin_year\"
+  -- is ambiguous"). Renamed the output column instead of chasing every call
+  -- site that needed qualifying.
   insert into public.invoice_counters (owner_id, prefix, fin_year, last_seq)
     values (v_uid, p_prefix, p_fin_year, 0)
     on conflict (owner_id, prefix, fin_year) do nothing;
