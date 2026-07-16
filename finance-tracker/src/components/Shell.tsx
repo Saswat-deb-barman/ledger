@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import {
@@ -17,6 +18,21 @@ const NAV = [
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [displayName, setDisplayName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const sb = supabaseBrowser();
+    (async () => {
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await sb
+        .from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+      if (active) setDisplayName(profile?.full_name || user.email || null);
+    })();
+    return () => { active = false; };
+  }, []);
+
   const signOut = async () => {
     await supabaseBrowser().auth.signOut();
     location.href = "/login";
@@ -27,7 +43,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                         max-md:flex-row max-md:items-center max-md:gap-2 max-md:overflow-x-auto">
         <div className="px-2 py-3 max-md:py-1">
           <div className="text-xl font-semibold tracking-tight">Ledger</div>
-          <div className="eyebrow max-md:hidden">Your full name</div>
+          {displayName && <div className="eyebrow max-md:hidden">{displayName}</div>}
         </div>
         <nav className="mt-4 flex-1 space-y-1 max-md:mt-0 max-md:flex max-md:space-y-0 max-md:gap-1">
           {NAV.map(({ href, label, icon: Icon }) => {

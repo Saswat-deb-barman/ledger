@@ -37,7 +37,24 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const { data: items } = await supabase
     .from("invoice_items").select("*").eq("invoice_id", params.id).order("sort_order");
 
-  const by = inv.billed_by ?? {};
+  let by = inv.billed_by ?? {};
+  if (!by.name) {
+    // Older invoices (or ones created before the profile was filled in)
+    // may not have a name baked into billed_by — fall back to the live
+    // profile instead of a hardcoded placeholder.
+    const { data: profile } = await supabase
+      .from("profiles").select("full_name, email, phone, pan, address")
+      .eq("id", inv.owner_id).maybeSingle();
+    if (profile) {
+      by = {
+        name: profile.full_name,
+        email: by.email ?? profile.email,
+        phone: by.phone ?? profile.phone,
+        pan: by.pan ?? profile.pan,
+        address: by.address ?? profile.address,
+      };
+    }
+  }
   const bank = inv.bank_details ?? {};
 
   const doc = React.createElement(Document, {},
@@ -55,7 +72,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       React.createElement(View, { style: [s.row, { marginTop: 28 }] },
         React.createElement(View, { style: { maxWidth: 240 } },
           React.createElement(Text, { style: s.eyebrow }, "Billed by"),
-          React.createElement(Text, { style: [s.bold, s.block] }, by.name ?? "Your full name"),
+          React.createElement(Text, { style: [s.bold, s.block] }, by.name || "—"),
           by.address && React.createElement(Text, { style: s.muted }, by.address),
           by.email && React.createElement(Text, { style: s.muted }, by.email),
           by.phone && React.createElement(Text, { style: s.muted }, by.phone),
