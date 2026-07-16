@@ -24,7 +24,13 @@ export async function POST(req: Request) {
     terms = null,
   } = body;
 
-  if (!prefix) return NextResponse.json({ error: "prefix required" }, { status: 400 });
+  // Validated here (not just in the UI) because it's baked permanently into
+  // invoice_number/invoice_counters and later placed unescaped into a
+  // Content-Disposition filename header when the PDF is downloaded.
+  if (!prefix || typeof prefix !== "string" || !/^[A-Z0-9]{1,10}$/.test(prefix)) {
+    return NextResponse.json(
+      { error: "prefix must be 1-10 uppercase letters/digits" }, { status: 400 });
+  }
 
   const fy = finYear(issue_date ? new Date(issue_date) : undefined);
 
