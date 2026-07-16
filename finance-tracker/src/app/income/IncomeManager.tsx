@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { inr, monthLabel, finYearMonths, monthKey } from "@/lib/format";
@@ -22,10 +22,22 @@ export default function IncomeManager({ month, sources, entries, clients }: any)
     await sb.from("income_entries").update({ expected: v }).eq("id", id);
     router.refresh();
   };
+  // Toggles received status. Defaults the received amount to `expected` when
+  // first marking received (the common case), but doesn't touch it if it was
+  // already set to something else — actual received amount is edited
+  // separately via setReceivedAmount, since it often differs from expected
+  // (TDS deduction, partial payment, rounding).
   const markReceived = async (e: any) => {
-    const received = e.is_received ? 0 : Number(e.expected);
+    const willBeReceived = !e.is_received;
+    const received = willBeReceived
+      ? (Number(e.received) || Number(e.expected))
+      : 0;
     await sb.from("income_entries")
-      .update({ is_received: !e.is_received, received }).eq("id", e.id);
+      .update({ is_received: willBeReceived, received }).eq("id", e.id);
+    router.refresh();
+  };
+  const setReceivedAmount = async (id: string, v: number) => {
+    await sb.from("income_entries").update({ received: v }).eq("id", id);
     router.refresh();
   };
 
@@ -56,14 +68,16 @@ export default function IncomeManager({ month, sources, entries, clients }: any)
       <Section title="Retainers" hint="Recurring — auto-filled, override any month">
         {retainers.length === 0 && <Empty>No active retainers this month.</Empty>}
         {retainers.map((e: any) => (
-          <Row key={e.id} e={e} onExpected={setExpected} onReceived={markReceived} />
+          <Row key={e.id} e={e} onExpected={setExpected} onReceived={markReceived}
+            onReceivedAmount={setReceivedAmount} />
         ))}
       </Section>
 
       <Section title="Projects & one-offs" hint="Added as they happen">
         {projects.length === 0 && <Empty>No project income logged for this month.</Empty>}
         {projects.map((e: any) => (
-          <Row key={e.id} e={e} onExpected={setExpected} onReceived={markReceived} />
+          <Row key={e.id} e={e} onExpected={setExpected} onReceived={markReceived}
+            onReceivedAmount={setReceivedAmount} />
         ))}
         <AddProjectIncome month={month} sources={sources} onDone={() => router.refresh()} />
       </Section>
@@ -75,18 +89,36 @@ export default function IncomeManager({ month, sources, entries, clients }: any)
   );
 }
 
-function Row({ e, onExpected, onReceived }: any) {
+function Row({ e, onExpected, onReceived, onReceivedAmount }: any) {
   const [val, setVal] = useState(Number(e.expected));
+  const [receivedVal, setReceivedVal] = useState(Number(e.received));
+  // Re-sync local drafts when the server value changes underneath us (e.g.
+  // "Mark received" defaults `received` to `expected` server-side) — without
+  // this the input would keep showing a stale local value after refresh.
+  useEffect(() => setVal(Number(e.expected)), [e.expected]);
+  useEffect(() => setReceivedVal(Number(e.received)), [e.received]);
+
   return (
     <div className="flex items-center gap-3 p-3.5 border-t border-line first:border-t-0">
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{e.income_sources?.name ?? e.label ?? "—"}</div>
         {e.label && <div className="text-xs text-muted">{e.label}</div>}
       </div>
-      <input type="number" value={val}
-        onChange={ev => setVal(+ev.target.value)}
-        onBlur={() => val !== Number(e.expected) && onExpected(e.id, val)}
-        className="tnum w-32 text-right border border-line rounded-lg px-2.5 py-1.5 text-sm bg-white" />
+      <label className="flex flex-col items-end gap-0.5">
+        <span className="text-[10px] text-muted">Expected</span>
+        <input type="number" value={val}
+          onChange={ev => setVal(+ev.target.value)}
+          onBlur={() => val !== Number(e.expected) && onExpected(e.id, val)}
+          className="tnum w-28 text-right border border-line rounded-lg px-2.5 py-1.5 text-sm bg-white" />
+      </label>
+      <label className="flex flex-col items-end gap-0.5">
+        <span className="text-[10px] text-muted">Received</span>
+        <input type="number" value={receivedVal} disabled={!e.is_received}
+          title={!e.is_received ? "Mark received first" : "Actual amount received — can differ from expected (TDS, partial payment, etc.)"}
+          onChange={ev => setReceivedVal(+ev.target.value)}
+          onBlur={() => e.is_received && receivedVal !== Number(e.received) && onReceivedAmount(e.id, receivedVal)}
+          className="tnum w-28 text-right border border-line rounded-lg px-2.5 py-1.5 text-sm bg-white disabled:bg-line/30 disabled:text-muted" />
+      </label>
       <button onClick={() => onReceived(e)}
         className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
           e.is_received ? "bg-income text-white" : "border border-line text-muted hover:border-income/50"}`}>
