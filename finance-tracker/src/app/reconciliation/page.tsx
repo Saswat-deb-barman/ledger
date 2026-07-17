@@ -1,32 +1,31 @@
 import Shell from "@/components/Shell";
 import { supabaseServer } from "@/lib/supabase-server";
-import ReconciliationManager from "./ReconciliationManager";
+import Triage from "./Triage";
 
 export const dynamic = "force-dynamic";
 
-export default async function Reconciliation() {
+export default async function ReconciliationPage() {
   const supabase = supabaseServer();
 
-  const [{ data: bankAccounts }, { data: transactions }, { data: pendingEntries }] = await Promise.all([
-    supabase.from("bank_accounts").select("id, account_name, is_default").order("is_default", { ascending: false }),
-    supabase.from("bank_transactions").select("*").order("txn_date", { ascending: false }).limit(300),
-    supabase
-      .from("income_entries")
-      .select("id, month, label, expected, received, is_received, income_sources(name, client_id, clients(name))")
-      .eq("is_received", false)
-      .order("month"),
-  ]);
+  const [{ data: triage }, { data: merchants }, { data: imports }, { data: rules }, { data: txns }] =
+    await Promise.all([
+      supabase.from("v_txn_triage").select("*"),
+      supabase.from("v_merchant_rollup").select("*").order("total", { ascending: false }).limit(40),
+      supabase.from("statement_imports").select("*, bank_accounts(account_name)").order("uploaded_at", { ascending: false }),
+      supabase.from("tag_rules").select("*").order("created_at"),
+      // pull medium+large rows for row-by-row triage; small stays summarized
+      supabase.from("bank_txns").select("id, txn_date, description, merchant, amount, direction, tier, tag")
+        .in("tier", ["medium", "large"]).order("amount", { ascending: false }).limit(400),
+    ]);
 
   return (
     <Shell>
-      <header className="mb-8">
-        <div className="eyebrow mb-1">Match statement credits to expected income</div>
-        <h1 className="text-3xl font-semibold tracking-tight">Reconcile</h1>
-      </header>
-      <ReconciliationManager
-        bankAccounts={bankAccounts ?? []}
-        transactions={transactions ?? []}
-        pendingEntries={pendingEntries ?? []}
+      <Triage
+        triage={triage ?? []}
+        merchants={merchants ?? []}
+        imports={imports ?? []}
+        rules={rules ?? []}
+        bigTxns={txns ?? []}
       />
     </Shell>
   );

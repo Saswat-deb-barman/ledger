@@ -172,39 +172,77 @@ create table public.expenses (
 create index on public.expenses (owner_id, month);
 
 -- ============================================================================
---  BANK RECONCILIATION — statement uploads reconciled against income_entries.
---    A transaction confirmed as a match updates income_entries.received/
---    is_received to the real amount. Debits are stored unclassified for now
---    (future expense/FCF-classification phase reads them).
+--  BANK RECONCILIATION — statement uploads, normalized + classified.
+--    account_id points at the existing bank_accounts table (already used by
+--    invoices for "pay to" details) rather than a separate accounts concept.
+--    matched_income_id is reserved for a later pass that ties credits back
+--    to income_entries — this phase focuses on triage/classification.
 -- ============================================================================
-create table public.bank_statement_imports (
+create table public.statement_imports (
   id              uuid primary key default gen_random_uuid(),
   owner_id        uuid not null references auth.users(id) on delete cascade,
-  bank_account_id uuid references public.bank_accounts(id) on delete set null,
-  filename        text,
+  account_id      uuid references public.bank_accounts(id) on delete set null,
+  bank            text not null,                 -- 'yes' | 'axis' | 'kotak'
+  file_name       text not null,
+  period_from     date,
+  period_to       date,
   row_count       int not null default 0,
-  created_at      timestamptz not null default now()
+  duplicate_count int not null default 0,        -- rows skipped as already-present
+  uploaded_at     timestamptz not null default now()
 );
-create index on public.bank_statement_imports (owner_id);
+create index on public.statement_imports (owner_id, uploaded_at desc);
 
-create table public.bank_transactions (
-  id              uuid primary key default gen_random_uuid(),
-  owner_id        uuid not null references auth.users(id) on delete cascade,
-  bank_account_id uuid references public.bank_accounts(id) on delete set null,
-  import_id       uuid references public.bank_statement_imports(id) on delete cascade,
-  txn_date        date not null,
-  description     text,
-  amount          numeric(14,2) not null,
-  direction       text not null check (direction in ('credit','debit')),
-  balance         numeric(14,2),
-  matched_income_entry_id uuid references public.income_entries(id) on delete set null,
-  status          text not null default 'unmatched'
-                    check (status in ('unmatched','matched','ignored')),
-  raw             jsonb,
-  created_at      timestamptz not null default now()
+create table public.bank_txns (
+  id            uuid primary key default gen_random_uuid(),
+  owner_id      uuid not null references auth.users(id) on delete cascade,
+  account_id    uuid references public.bank_accounts(id) on delete set null,
+  import_id     uuid references public.statement_imports(id) on delete set null,
+  txn_date      date not null,
+  description   text,
+  reference     text,
+  amount        numeric(14,2) not null,          -- always positive
+  direction     text not null check (direction in ('credit','debit')),
+  balance       numeric(14,2),
+  merchant      text,                            -- extracted counterparty
+  tier          text not null                    -- 'small' | 'medium' | 'large'
+                  check (tier in ('small','medium','large')),
+  tag           text,                            -- from tag_rules or manual
+  -- dedupe fingerprint: same account + date + amount + balance = same txn
+  fingerprint   text not null,
+  reconciled    boolean not null default false,  -- reserved for the matching pass
+  matched_income_id uuid references public.income_entries(id) on delete set null,
+  created_at    timestamptz not null default now(),
+  unique (owner_id, fingerprint)
 );
-create index on public.bank_transactions (owner_id, status);
-create index on public.bank_transactions (owner_id, txn_date);
+create index on public.bank_txns (owner_id, txn_date desc);
+create index on public.bank_txns (owner_id, tier);
+create index on public.bank_txns (owner_id, direction);
+create index on public.bank_txns (owner_id, tag);
+
+-- ---------- TAG RULES (keyword → tag, auto-applied on every future import) ----------
+create table public.tag_rules (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null references auth.users(id) on delete cascade,
+  keyword     text not null,                     -- matched case-insensitively vs description/merchant
+  tag         text not null,                     -- 'income' | 'living' | 'leisure' | ...
+  created_at  timestamptz not null default now(),
+  unique (owner_id, keyword)
+);
+
+-- ---------- TRIAGE ROLL-UP VIEW ----------
+create or replace view public.v_txn_triage
+with (security_invoker = true) as
+select owner_id, direction, tier, count(*) as n, sum(amount) as total
+from public.bank_txns
+group by owner_id, direction, tier;
+
+-- ---------- MERCHANT ROLL-UP (for "where money goes" + rule suggestions) ----------
+create or replace view public.v_merchant_rollup
+with (security_invoker = true) as
+select owner_id, direction, coalesce(merchant,'(unknown)') as merchant,
+       count(*) as n, sum(amount) as total, max(tag) as tag
+from public.bank_txns
+group by owner_id, direction, coalesce(merchant,'(unknown)');
 
 -- ============================================================================
 --  GAP-FREE INVOICE NUMBERING (carried over from v1)
@@ -297,9 +335,10 @@ alter table public.income_sources   enable row level security;
 alter table public.income_entries   enable row level security;
 alter table public.expenses         enable row level security;
 alter table public.invoice_counters enable row level security;
-alter table public.bank_accounts           enable row level security;
-alter table public.bank_statement_imports  enable row level security;
-alter table public.bank_transactions       enable row level security;
+alter table public.bank_accounts     enable row level security;
+alter table public.statement_imports enable row level security;
+alter table public.bank_txns         enable row level security;
+alter table public.tag_rules         enable row level security;
 
 create policy own_profiles       on public.profiles       using (id = auth.uid()) with check (id = auth.uid());
 create policy own_clients        on public.clients        using (owner_id = auth.uid()) with check (owner_id = auth.uid());
@@ -314,7 +353,9 @@ create policy own_invoice_items  on public.invoice_items
   with check (exists (select 1 from public.invoices i where i.id = invoice_id and i.owner_id = auth.uid()));
 create policy own_bank_accounts on public.bank_accounts
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
-create policy own_bank_statement_imports on public.bank_statement_imports
+create policy own_statement_imports on public.statement_imports
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
-create policy own_bank_transactions on public.bank_transactions
+create policy own_bank_txns on public.bank_txns
+  using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy own_tag_rules on public.tag_rules
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
