@@ -38,6 +38,25 @@ create table public.clients (
   created_at      timestamptz not null default now()
 );
 
+-- ---------- BANK ACCOUNTS (your accounts; invoices + statement imports both reference these) ----------
+create table public.bank_accounts (
+  id              uuid primary key default gen_random_uuid(),
+  owner_id        uuid not null references auth.users(id) on delete cascade,
+  account_name    text not null,           -- e.g. "HDFC - Primary"
+  bank_name       text,
+  account_holder  text,
+  account_number  text,
+  ifsc            text,
+  branch          text,
+  upi             text,
+  is_default      boolean not null default false,
+  notes           text,
+  created_at      timestamptz not null default now()
+);
+create index on public.bank_accounts (owner_id);
+-- at most one default account per owner
+create unique index one_default_bank_account on public.bank_accounts (owner_id) where is_default;
+
 -- ---------- PROJECTS (lightweight; declared before income_entries refs it) ----------
 create table public.projects (
   id            uuid primary key default gen_random_uuid(),
@@ -62,6 +81,7 @@ create table public.invoices (
   prefix          text not null,
   client_id       uuid references public.clients(id) on delete set null,
   project_id      uuid references public.projects(id) on delete set null,
+  bank_account_id uuid references public.bank_accounts(id) on delete set null,
   status          text not null default 'draft'
                     check (status in ('draft','sent','paid','overdue','cancelled')),
   issue_date      date not null default current_date,
@@ -150,6 +170,41 @@ create table public.expenses (
   created_at    timestamptz not null default now()
 );
 create index on public.expenses (owner_id, month);
+
+-- ============================================================================
+--  BANK RECONCILIATION — statement uploads reconciled against income_entries.
+--    A transaction confirmed as a match updates income_entries.received/
+--    is_received to the real amount. Debits are stored unclassified for now
+--    (future expense/FCF-classification phase reads them).
+-- ============================================================================
+create table public.bank_statement_imports (
+  id              uuid primary key default gen_random_uuid(),
+  owner_id        uuid not null references auth.users(id) on delete cascade,
+  bank_account_id uuid references public.bank_accounts(id) on delete set null,
+  filename        text,
+  row_count       int not null default 0,
+  created_at      timestamptz not null default now()
+);
+create index on public.bank_statement_imports (owner_id);
+
+create table public.bank_transactions (
+  id              uuid primary key default gen_random_uuid(),
+  owner_id        uuid not null references auth.users(id) on delete cascade,
+  bank_account_id uuid references public.bank_accounts(id) on delete set null,
+  import_id       uuid references public.bank_statement_imports(id) on delete cascade,
+  txn_date        date not null,
+  description     text,
+  amount          numeric(14,2) not null,
+  direction       text not null check (direction in ('credit','debit')),
+  balance         numeric(14,2),
+  matched_income_entry_id uuid references public.income_entries(id) on delete set null,
+  status          text not null default 'unmatched'
+                    check (status in ('unmatched','matched','ignored')),
+  raw             jsonb,
+  created_at      timestamptz not null default now()
+);
+create index on public.bank_transactions (owner_id, status);
+create index on public.bank_transactions (owner_id, txn_date);
 
 -- ============================================================================
 --  GAP-FREE INVOICE NUMBERING (carried over from v1)
@@ -242,6 +297,9 @@ alter table public.income_sources   enable row level security;
 alter table public.income_entries   enable row level security;
 alter table public.expenses         enable row level security;
 alter table public.invoice_counters enable row level security;
+alter table public.bank_accounts           enable row level security;
+alter table public.bank_statement_imports  enable row level security;
+alter table public.bank_transactions       enable row level security;
 
 create policy own_profiles       on public.profiles       using (id = auth.uid()) with check (id = auth.uid());
 create policy own_clients        on public.clients        using (owner_id = auth.uid()) with check (owner_id = auth.uid());
@@ -254,3 +312,9 @@ create policy own_counters       on public.invoice_counters using (owner_id = au
 create policy own_invoice_items  on public.invoice_items
   using (exists (select 1 from public.invoices i where i.id = invoice_id and i.owner_id = auth.uid()))
   with check (exists (select 1 from public.invoices i where i.id = invoice_id and i.owner_id = auth.uid()));
+create policy own_bank_accounts on public.bank_accounts
+  using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy own_bank_statement_imports on public.bank_statement_imports
+  using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy own_bank_transactions on public.bank_transactions
+  using (owner_id = auth.uid()) with check (owner_id = auth.uid());
