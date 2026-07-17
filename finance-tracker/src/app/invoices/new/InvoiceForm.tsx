@@ -7,10 +7,14 @@ import { Plus, Trash2 } from "lucide-react";
 type Item = { description: string; quantity: number; rate: number };
 type Client = { id: string; name: string; invoice_prefix: string };
 type Project = { id: string; name: string; client_id: string | null };
+type BankAccount = {
+  id: string; account_name: string; bank_name: string | null; account_holder: string | null;
+  account_number: string | null; ifsc: string | null; upi: string | null; is_default: boolean;
+};
 
 export default function InvoiceForm({
-  clients, projects, myProfile,
-}: { clients: Client[]; projects: Project[]; myProfile: any }) {
+  clients, projects, myProfile, bankAccounts,
+}: { clients: Client[]; projects: Project[]; myProfile: any; bankAccounts: BankAccount[] }) {
   const router = useRouter();
   const [clientId, setClientId] = useState<string>("");     // "" = Personal
   const [projectId, setProjectId] = useState<string>("");
@@ -18,6 +22,8 @@ export default function InvoiceForm({
   const [dueDate, setDueDate] = useState("");
   const [discount, setDiscount] = useState(0);
   const [items, setItems] = useState<Item[]>([{ description: "", quantity: 1, rate: 0 }]);
+  const [bankAccountId, setBankAccountId] = useState<string>(
+    () => bankAccounts.find(a => a.is_default)?.id ?? bankAccounts[0]?.id ?? "");
   const [saving, setSaving] = useState(false);
 
   // Personal invoices use your initials; client invoices use client prefix.
@@ -34,6 +40,17 @@ export default function InvoiceForm({
 
   const setItem = (i: number, patch: Partial<Item>) =>
     setItems(items.map((it, idx) => idx === i ? { ...it, ...patch } : it));
+
+  const selectedAccount = bankAccounts.find(a => a.id === bankAccountId) ?? null;
+  // Snapshot the account's details at creation time (immutable, same pattern as
+  // billed_by) — an invoice shouldn't change retroactively if the account is edited.
+  const bankDetails = selectedAccount ? {
+    account_name: selectedAccount.account_holder || myProfile?.full_name,
+    account_number: selectedAccount.account_number,
+    ifsc: selectedAccount.ifsc,
+    bank: selectedAccount.bank_name,
+    upi: selectedAccount.upi,
+  } : myProfile?.default_bank ?? null;
 
   const submit = async () => {
     setSaving(true);
@@ -52,7 +69,8 @@ export default function InvoiceForm({
           name: myProfile?.full_name, email: myProfile?.email,
           phone: myProfile?.phone, pan: myProfile?.pan, address: myProfile?.address,
         },
-        bank_details: myProfile?.default_bank ?? null,
+        bank_details: bankDetails,
+        bank_account_id: selectedAccount?.id ?? null,
       }),
     });
     const json = await res.json();
@@ -83,6 +101,14 @@ export default function InvoiceForm({
           </Field>
           <Field label="Due date">
             <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="input" />
+          </Field>
+          <Field label="Pay to (bank account)">
+            <select value={bankAccountId} onChange={e => setBankAccountId(e.target.value)} className="input">
+              <option value="">— none —</option>
+              {bankAccounts.map(a => (
+                <option key={a.id} value={a.id}>{a.account_name}{a.is_default ? " (default)" : ""}</option>
+              ))}
+            </select>
           </Field>
         </div>
 

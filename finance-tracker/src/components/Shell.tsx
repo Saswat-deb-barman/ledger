@@ -5,15 +5,18 @@ import { usePathname } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import {
   LayoutDashboard, TrendingUp, Wallet, FileText, FolderKanban, Users, LogOut,
+  Landmark, ArrowLeftRight,
 } from "lucide-react";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/income",    label: "Income",    icon: TrendingUp },
-  { href: "/expenses",  label: "Expenses",  icon: Wallet },
-  { href: "/invoices",  label: "Invoices",  icon: FileText },
-  { href: "/projects",  label: "Projects",  icon: FolderKanban },
-  { href: "/clients",   label: "Clients",   icon: Users },
+  { href: "/dashboard",      label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/income",         label: "Income",       icon: TrendingUp },
+  { href: "/expenses",       label: "Expenses",     icon: Wallet },
+  { href: "/invoices",       label: "Invoices",     icon: FileText },
+  { href: "/projects",       label: "Projects",     icon: FolderKanban },
+  { href: "/clients",        label: "Clients",      icon: Users },
+  { href: "/accounts",       label: "Bank accounts", icon: Landmark },
+  { href: "/reconciliation", label: "Reconcile",    icon: ArrowLeftRight },
 ];
 
 export default function Shell({ children }: { children: React.ReactNode }) {

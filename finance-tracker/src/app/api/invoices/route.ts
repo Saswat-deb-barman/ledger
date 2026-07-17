@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     tax_rate = 0,
     billed_by = null,
     bank_details = null,
+    bank_account_id = null,
     notes = null,
     terms = null,
   } = body;
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
     fin_year: (num as any).out_fin_year,
     seq: (num as any).seq,
     prefix,
-    client_id, project_id,
+    client_id, project_id, bank_account_id,
     status: "draft",
     issue_date: issue_date ?? todayIST(),
     due_date,
