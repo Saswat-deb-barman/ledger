@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+import { Trash2 } from "lucide-react";
 
 const NEXT: Record<string, { to: string; label: string }[]> = {
   draft:   [{ to: "sent", label: "Mark as sent" }],
@@ -24,8 +25,18 @@ export default function StatusActions({ id, status }: { id: string; status: stri
     router.refresh();
   };
 
+  // Draft only — the API route enforces this too, since a sent/paid invoice
+  // has already left a permanent, possibly client-visible number behind it.
+  const remove = async () => {
+    if (!confirm("Delete this draft invoice? This can't be undone.")) return;
+    setBusy(true);
+    const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (json.error) { setBusy(false); alert(json.error); return; }
+    router.push("/invoices");
+  };
+
   const actions = NEXT[status] ?? [];
-  if (!actions.length) return null;
   return (
     <div className="flex gap-2">
       {actions.map(a => (
@@ -37,6 +48,12 @@ export default function StatusActions({ id, status }: { id: string; status: stri
           {a.label}
         </button>
       ))}
+      {status === "draft" && (
+        <button onClick={remove} disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-line text-outflow px-3 py-2 text-sm font-medium disabled:opacity-50 hover:border-outflow/40">
+          <Trash2 size={15} /> Delete
+        </button>
+      )}
     </div>
   );
 }
