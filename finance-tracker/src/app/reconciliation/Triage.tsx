@@ -2,12 +2,22 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
-import { inr, fmtDate } from "@/lib/format";
+import { inr, fmtDate, monthLabel } from "@/lib/format";
 import { Upload, ChevronDown, ChevronRight, Tag, Check, X } from "lucide-react";
 
 const TIER_LABEL: Record<string,string> = { small: "Small (<₹2k)", medium: "Medium (₹2k–25k)", large: "Large (>₹25k)" };
 
-export default function Triage({ triage, merchants, imports, rules, bigTxns }: any) {
+// Recomputes an income_entry's `received` from the bank_txns actually matched
+// to it — once an entry has any match, its received figure is bank-truth
+// (sum of matched credits), replacing the placeholder received=expected value
+// from the historical import rather than being added on top of it.
+async function recomputeEntry(sb: any, entryId: string) {
+  const { data: rows } = await sb.from("bank_txns").select("amount").eq("matched_income_id", entryId);
+  const received = (rows ?? []).reduce((s: number, r: any) => s + Number(r.amount), 0);
+  await sb.from("income_entries").update({ received, is_received: received > 0 }).eq("id", entryId);
+}
+
+export default function Triage({ triage, merchants, imports, rules, bigTxns, incomeEntries }: any) {
   const router = useRouter();
   const [tab, setTab] = useState<"triage" | "merchants" | "history">("triage");
   const [dir, setDir] = useState<"debit" | "credit">("debit");
@@ -16,6 +26,25 @@ export default function Triage({ triage, merchants, imports, rules, bigTxns }: a
 
   const t = (tier: string, d: string) =>
     triage.find((x: any) => x.tier === tier && x.direction === d) ?? { n: 0, total: 0 };
+
+  const entryLabel = (e: any) => `${e.income_sources?.name ?? "—"} · ${monthLabel(e.month)} · ${inr(e.expected)}`;
+  const entriesById = useMemo(
+    () => Object.fromEntries(incomeEntries.map((e: any) => [e.id, e])), [incomeEntries]);
+
+  const matchTxn = async (txn: any, incomeEntryId: string) => {
+    const sb = supabaseBrowser();
+    const prevEntryId = txn.matched_income_id;
+    await sb.from("bank_txns").update({ matched_income_id: incomeEntryId, reconciled: true }).eq("id", txn.id);
+    await recomputeEntry(sb, incomeEntryId);
+    if (prevEntryId && prevEntryId !== incomeEntryId) await recomputeEntry(sb, prevEntryId);
+    router.refresh();
+  };
+  const unmatchTxn = async (txn: any) => {
+    const sb = supabaseBrowser();
+    await sb.from("bank_txns").update({ matched_income_id: null, reconciled: false }).eq("id", txn.id);
+    if (txn.matched_income_id) await recomputeEntry(sb, txn.matched_income_id);
+    router.refresh();
+  };
 
   const upload = async (file: File) => {
     setUploading(true); setMsg("");
@@ -66,8 +95,12 @@ export default function Triage({ triage, merchants, imports, rules, bigTxns }: a
             ))}
           </div>
 
-          <TierBlock tier="large"  data={t("large", dir)}  dir={dir} txns={bigTxns} rules={rules} defaultOpen />
-          <TierBlock tier="medium" data={t("medium", dir)} dir={dir} txns={bigTxns} rules={rules} />
+          <TierBlock tier="large"  data={t("large", dir)}  dir={dir} txns={bigTxns} rules={rules} defaultOpen
+            incomeEntries={incomeEntries} entriesById={entriesById} entryLabel={entryLabel}
+            onMatch={matchTxn} onUnmatch={unmatchTxn} />
+          <TierBlock tier="medium" data={t("medium", dir)} dir={dir} txns={bigTxns} rules={rules}
+            incomeEntries={incomeEntries} entriesById={entriesById} entryLabel={entryLabel}
+            onMatch={matchTxn} onUnmatch={unmatchTxn} />
           <SmallSummary data={t("small", dir)} dir={dir} />
         </>
       )}
@@ -78,7 +111,7 @@ export default function Triage({ triage, merchants, imports, rules, bigTxns }: a
   );
 }
 
-function TierBlock({ tier, data, dir, txns, rules, defaultOpen }: any) {
+function TierBlock({ tier, data, dir, txns, rules, defaultOpen, incomeEntries, entriesById, entryLabel, onMatch, onUnmatch }: any) {
   const [open, setOpen] = useState(!!defaultOpen);
   const rows = txns.filter((x: any) => x.tier === tier && x.direction === dir);
   return (
@@ -100,12 +133,42 @@ function TierBlock({ tier, data, dir, txns, rules, defaultOpen }: any) {
               </div>
               {x.tag && <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent">{x.tag}</span>}
               <div className={`tnum text-sm w-24 text-right ${dir === "credit" ? "text-income" : "text-outflow"}`}>{inr(x.amount)}</div>
+              {dir === "credit" && (
+                <MatchControl x={x} incomeEntries={incomeEntries} entriesById={entriesById}
+                  entryLabel={entryLabel} onMatch={onMatch} onUnmatch={onUnmatch} />
+              )}
             </div>
           ))}
         </div>
       )}
       {open && rows.length === 0 && <div className="p-4 text-sm text-muted border-t border-line">Nothing in this tier.</div>}
     </div>
+  );
+}
+
+function MatchControl({ x, incomeEntries, entriesById, entryLabel, onMatch, onUnmatch }: any) {
+  if (x.matched_income_id) {
+    const e = entriesById[x.matched_income_id];
+    return (
+      <div className="flex items-center gap-1 shrink-0">
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-income/10 text-income whitespace-nowrap">
+          {e ? entryLabel(e) : "Matched"}
+        </span>
+        <button onClick={() => onUnmatch(x)} title="Unmatch" className="text-muted hover:text-outflow">
+          <X size={12} />
+        </button>
+      </div>
+    );
+  }
+  // Closest-amount-first — the likeliest income entry for this credit sorts to the top.
+  const candidates = [...incomeEntries].sort(
+    (a: any, b: any) => Math.abs(Number(a.expected) - x.amount) - Math.abs(Number(b.expected) - x.amount));
+  return (
+    <select defaultValue="" onChange={e => e.target.value && onMatch(x, e.target.value)}
+      className="text-[10px] border border-line rounded-full px-2 py-1 bg-white text-muted shrink-0 max-w-[140px]">
+      <option value="" disabled>Match…</option>
+      {candidates.map((e: any) => <option key={e.id} value={e.id}>{entryLabel(e)}</option>)}
+    </select>
   );
 }
 
