@@ -301,6 +301,31 @@ begin
 end; $$;
 
 -- ============================================================================
+--  TAX MODULE — document repository for CA filing, organized by financial year.
+--    Files live in Supabase Storage bucket "tax-documents" at
+--    {owner_id}/{fin_year}/{uuid}-{file_name}; this table is the index/metadata.
+-- ============================================================================
+create table public.tax_documents (
+  id            uuid primary key default gen_random_uuid(),
+  owner_id      uuid not null references auth.users(id) on delete cascade,
+  fin_year      text not null,                    -- e.g. '24-25'
+  category      text not null check (category in (
+                  'form_16a_tds','form_26as','ais_tis','bank_statement',
+                  'investment_proof','rent_receipt','foreign_remittance_certificate',
+                  'computation_sheet','itr_acknowledgement','audit_report',
+                  'invoice_copy','other'
+                )),
+  file_name     text not null,
+  storage_path  text not null,
+  file_size     int,
+  mime_type     text,
+  notes         text,
+  added_by      text not null default 'self' check (added_by in ('self','ca')),
+  created_at    timestamptz not null default now()
+);
+create index on public.tax_documents (owner_id, fin_year);
+
+-- ============================================================================
 --  MONTHLY ROLL-UP VIEW — mirrors the Master Sheet
 -- ============================================================================
 create or replace view public.v_monthly
@@ -339,6 +364,7 @@ alter table public.bank_accounts     enable row level security;
 alter table public.statement_imports enable row level security;
 alter table public.bank_txns         enable row level security;
 alter table public.tag_rules         enable row level security;
+alter table public.tax_documents     enable row level security;
 
 create policy own_profiles       on public.profiles       using (id = auth.uid()) with check (id = auth.uid());
 create policy own_clients        on public.clients        using (owner_id = auth.uid()) with check (owner_id = auth.uid());
@@ -358,4 +384,6 @@ create policy own_statement_imports on public.statement_imports
 create policy own_bank_txns on public.bank_txns
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 create policy own_tag_rules on public.tag_rules
+  using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy own_tax_documents on public.tax_documents
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());

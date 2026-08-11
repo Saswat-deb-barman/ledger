@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import {
   LayoutDashboard, TrendingUp, Wallet, FileText, FolderKanban, Users, LogOut,
-  Landmark, ArrowLeftRight,
+  Landmark, ArrowLeftRight, Receipt,
 } from "lucide-react";
 
 const NAV = [
@@ -17,6 +17,7 @@ const NAV = [
   { href: "/clients",        label: "Clients",      icon: Users },
   { href: "/accounts",       label: "Bank accounts", icon: Landmark },
   { href: "/reconciliation", label: "Reconcile",    icon: ArrowLeftRight },
+  { href: "/tax",            label: "Tax",          icon: Receipt },
 ];
 
 export default function Shell({ children }: { children: React.ReactNode }) {
