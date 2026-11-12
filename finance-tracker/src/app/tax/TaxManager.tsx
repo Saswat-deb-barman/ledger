@@ -80,10 +80,13 @@ function UploadForm({ fy, onDone }: any) {
 
   const upload = async () => {
     if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { setMsg("Error: file is larger than 25 MB"); return; }
     setBusy(true); setMsg("");
     const sb = supabaseBrowser();
     const { data: { user } } = await sb.auth.getUser();
-    const path = `${user!.id}/${fy}/${crypto.randomUUID()}-${file.name}`;
+    // Keep the original name for display, but store under a sanitized key.
+    const safeName = file.name.replace(/[^\w.\- ]+/g, "_").slice(-120);
+    const path = `${user!.id}/${fy}/${crypto.randomUUID()}-${safeName}`;
     const { error: upErr } = await sb.storage.from("tax-documents").upload(path, file);
     if (upErr) { setMsg(`Error: ${upErr.message}`); setBusy(false); return; }
     const { error: insErr } = await sb.from("tax_documents").insert({

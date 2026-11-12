@@ -4,7 +4,7 @@ import { finYear, todayIST } from "@/lib/format";
 
 // POST /api/invoices — creates an invoice with a gap-free, per-context number.
 export async function POST(req: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

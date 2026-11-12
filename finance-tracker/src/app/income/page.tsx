@@ -5,10 +5,9 @@ import IncomeManager from "./IncomeManager";
 
 export const dynamic = "force-dynamic";
 
-export default async function IncomePage({
-  searchParams,
-}: { searchParams: { m?: string } }) {
-  const supabase = supabaseServer();
+export default async function IncomePage(props: { searchParams: Promise<{ m?: string }> }) {
+  const searchParams = await props.searchParams;
+  const supabase = await supabaseServer();
   const month = searchParams.m ?? monthKey();
 
   // Make sure this month's retainer rows exist (auto-fill, non-destructive).

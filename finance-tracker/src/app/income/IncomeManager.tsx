@@ -212,7 +212,7 @@ function AddSource({ clients, onDone }: any) {
   );
   return (
     <div className="card p-5 grid grid-cols-[1fr_140px_140px_140px_auto] gap-3 items-end max-sm:grid-cols-1">
-      <L label="Name"><input className="inp2" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="Northwind" /></L>
+      <L label="Name"><input className="inp2" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="Client or retainer name" /></L>
       <L label="Type">
         <select className="inp2" value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })}>
           <option value="retainer">Retainer</option><option value="project">Project</option>

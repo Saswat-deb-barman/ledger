@@ -1,7 +1,7 @@
 -- ============================================================================
 --  Ledger — Schema (Model B: monthly cash-flow spine)
 --
---  Mental model (from a real spreadsheet):
+--  Mental model:
 --    The MONTH is the unit of truth.  in_hand = received − expenses, per month.
 --    Income has two shapes:
 --      • retainer  — recurring monthly, auto-fills until stopped, override-able
@@ -24,7 +24,7 @@ create table public.profiles (
   created_at    timestamptz not null default now()
 );
 
--- ---------- CLIENTS (Acme, Northwind, Globex, Pied Piper…) ----------
+-- ---------- CLIENTS (the people / companies you invoice) ----------
 create table public.clients (
   id              uuid primary key default gen_random_uuid(),
   owner_id        uuid not null references auth.users(id) on delete cascade,
@@ -387,3 +387,49 @@ create policy own_tag_rules on public.tag_rules
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 create policy own_tax_documents on public.tax_documents
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+
+-- ============================================================================
+--  STORAGE — private bucket for the tax module.
+--    Files are stored under {auth.uid()}/{fin_year}/..., and these policies
+--    restrict every operation to the folder named after the signed-in user.
+--    The bucket is NOT public; downloads use short-lived signed URLs.
+-- ============================================================================
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('tax-documents', 'tax-documents', false, 26214400)   -- 25 MB per file
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit;
+
+create policy tax_docs_select on storage.objects for select to authenticated
+  using (bucket_id = 'tax-documents' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy tax_docs_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'tax-documents' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy tax_docs_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'tax-documents' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ============================================================================
+--  HARDENING — the two SECURITY DEFINER functions only make sense for a
+--  signed-in user, so remove the default PUBLIC / anon execute grants.
+-- ============================================================================
+revoke execute on function public.next_invoice_number(text, text) from public, anon;
+revoke execute on function public.ensure_retainer_entries(date)   from public, anon;
+grant  execute on function public.next_invoice_number(text, text) to authenticated;
+grant  execute on function public.ensure_retainer_entries(date)   to authenticated;
+
+-- ============================================================================
+--  AUTO-PROFILE — create a profiles row on first sign-in (name + email come
+--  from the Google account). Fill in PAN / address / phone / default_bank
+--  afterwards; they power the "Billed By" block on invoice PDFs.
+-- ============================================================================
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, full_name, email)
+  values (new.id,
+          coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name'),
+          new.email)
+  on conflict (id) do nothing;
+  return new;
+end; $$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();

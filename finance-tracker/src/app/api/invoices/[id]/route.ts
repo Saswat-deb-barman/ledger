@@ -6,8 +6,9 @@ import { supabaseServer } from "@/lib/supabase-server";
 // invoice_number behind it; deleting those would break gap-free numbering
 // and destroy an audit trail. The status check is enforced here (not just
 // hidden in the UI) since RLS alone only checks ownership, not status.
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const supabase = supabaseServer();
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

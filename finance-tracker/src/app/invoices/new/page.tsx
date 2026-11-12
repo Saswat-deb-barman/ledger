@@ -5,7 +5,7 @@ import InvoiceForm from "./InvoiceForm";
 export const dynamic = "force-dynamic";
 
 export default async function NewInvoice() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
   const [{ data: clients }, { data: projects }, { data: profile }, { data: bankAccounts }] = await Promise.all([

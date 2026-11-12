@@ -5,7 +5,7 @@ import ClientManager from "./ClientManager";
 export const dynamic = "force-dynamic";
 
 export default async function Clients() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data: clients } = await supabase.from("clients").select("*").order("name");
   return (
     <Shell>

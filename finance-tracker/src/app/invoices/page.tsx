@@ -6,7 +6,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default async function Invoices() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data: invoices } = await supabase
     .from("invoices")
     .select("id, invoice_number, status, total, issue_date, due_date, clients(name), projects(name)")

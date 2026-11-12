@@ -7,7 +7,7 @@ import { ArrowDownLeft, ArrowUpRight, Wallet, Hourglass } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const fy = finYear();
   const months = finYearMonths();
   const thisMonth = monthKey();

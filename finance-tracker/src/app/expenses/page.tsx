@@ -5,8 +5,9 @@ import ExpenseManager from "./ExpenseManager";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExpensesPage({ searchParams }: { searchParams: { m?: string } }) {
-  const supabase = supabaseServer();
+export default async function ExpensesPage(props: { searchParams: Promise<{ m?: string }> }) {
+  const searchParams = await props.searchParams;
+  const supabase = await supabaseServer();
   const month = searchParams.m ?? monthKey();
   const { data: expenses } = await supabase
     .from("expenses").select("*").eq("month", month).order("bucket").order("created_at");

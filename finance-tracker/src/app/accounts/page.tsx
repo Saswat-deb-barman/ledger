@@ -5,7 +5,7 @@ import BankAccountManager from "./BankAccountManager";
 export const dynamic = "force-dynamic";
 
 export default async function Accounts() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data: accounts } = await supabase.from("bank_accounts").select("*").order("created_at");
   return (
     <Shell>

@@ -5,7 +5,7 @@ import Triage from "./Triage";
 export const dynamic = "force-dynamic";
 
 export default async function ReconciliationPage() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   const [{ data: triage }, { data: merchants }, { data: imports }, { data: rules }, { data: txns }, { data: incomeEntries }] =
     await Promise.all([

@@ -1,7 +1,12 @@
 "use client";
+import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 export default function LoginPage() {
+  const [authError, setAuthError] = useState(false);
+  useEffect(() => {
+    setAuthError(new URLSearchParams(location.search).has("error"));
+  }, []);
   const signIn = async () => {
     const supabase = supabaseBrowser();
     await supabase.auth.signInWithOAuth({
@@ -32,6 +37,11 @@ export default function LoginPage() {
           </svg>
           Continue with Google
         </button>
+        {authError && (
+          <p role="alert" className="text-sm text-outflow mt-4">
+            Sign-in didn&apos;t complete. Please try again.
+          </p>
+        )}
         <p className="text-xs text-muted mt-6">
           Only you can see your data. Sessions are private to your account.
         </p>

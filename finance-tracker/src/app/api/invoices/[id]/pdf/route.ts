@@ -26,8 +26,12 @@ const s = StyleSheet.create({
 const money = (n: number) =>
   "INR " + new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2 }).format(Number(n || 0));
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const supabase = supabaseServer();
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const { data: inv } = await supabase
     .from("invoices")
     .select("*, clients(name, gstin, pan, billing_address, email)")

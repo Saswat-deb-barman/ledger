@@ -5,17 +5,30 @@ import { parseStatement, extractMerchant, tierOf, fingerprint } from "@/lib/pars
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 const BANK_NAME: Record<string, string> = { yes: "Yes Bank", axis: "Axis Bank", kotak: "Kotak Mahindra Bank" };
 
 // POST multipart/form-data with `file`. Parses, dedupes, records history.
 export async function POST(req: Request) {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
+  // Statements are small; reject oversized bodies before buffering them.
+  const declared = Number(req.headers.get("content-length") ?? 0);
+  if (declared > MAX_UPLOAD_BYTES + 4096) {
+    return NextResponse.json({ error: "file too large (max 10 MB)" }, { status: 413 });
+  }
+
   const form = await req.formData();
-  const file = form.get("file") as File | null;
-  if (!file) return NextResponse.json({ error: "no file" }, { status: 400 });
+  const file = form.get("file");
+  if (!(file instanceof File)) return NextResponse.json({ error: "no file" }, { status: 400 });
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: "file too large (max 10 MB)" }, { status: 413 });
+  }
+  if (!/\.(csv|xls|xlsx|xml|txt)$/i.test(file.name)) {
+    return NextResponse.json({ error: "unsupported file type" }, { status: 415 });
+  }
 
   const buf = Buffer.from(await file.arrayBuffer());
   let p;

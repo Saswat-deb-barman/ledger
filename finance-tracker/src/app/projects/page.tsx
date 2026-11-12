@@ -5,7 +5,7 @@ import ProjectManager from "./ProjectManager";
 export const dynamic = "force-dynamic";
 
 export default async function Projects() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const [{ data: projects }, { data: clients }] = await Promise.all([
     supabase.from("projects").select("*, clients(name)").order("created_at", { ascending: false }),
     supabase.from("clients").select("id, name").order("name"),

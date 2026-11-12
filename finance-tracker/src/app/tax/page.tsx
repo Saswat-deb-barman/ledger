@@ -15,10 +15,9 @@ function finYearRange(): string[] {
   return years.reverse(); // most recent first
 }
 
-export default async function TaxPage({
-  searchParams,
-}: { searchParams: { fy?: string } }) {
-  const supabase = supabaseServer();
+export default async function TaxPage(props: { searchParams: Promise<{ fy?: string }> }) {
+  const searchParams = await props.searchParams;
+  const supabase = await supabaseServer();
   const years = finYearRange();
   const fy = searchParams.fy && years.includes(searchParams.fy) ? searchParams.fy : years[0];
 
