@@ -28,7 +28,8 @@ shared backend.
 | DB functions | `SECURITY DEFINER` functions pin `search_path`, derive the owner from `auth.uid()` (never from an argument), and have `EXECUTE` revoked from `anon`/`PUBLIC`. |
 | Views | Created with `security_invoker = true` so they obey the caller's RLS. |
 | Browser | CSP (`default-src 'self'`, no framing, restricted `connect-src` to your Supabase origin), `X-Frame-Options`, `nosniff`, HSTS, strict referrer policy, no `X-Powered-By`. |
-| Untrusted files | Uploaded statements are size-capped (10 MB), extension-checked, and parsed in memory; nothing is executed or written to disk. |
+| Untrusted files | Uploaded statements are size-capped (10 MB), extension-checked, row/column/cell-capped, and parsed in memory; nothing is executed or written to disk. |
+| "Add any bank" | A learned bank format is **plain validated data** (column numbers + enums, ≤2 KB, per-user RLS) — never generated code, never a user-supplied regex, so there is nothing to execute or ReDoS. The statement is analysed on your own server; no third-party or AI service sees it. |
 | Supply chain | `package-lock.json` committed; Dependabot + CI `npm audit`. `xlsx` is installed from the **official SheetJS CDN tarball** (0.20.3) because the npm registry copy is unmaintained and has known CVEs — `npm audit` cannot see this one, so **check for new SheetJS releases yourself**. |
 
 ## Install-time checklist (every installer)

@@ -203,7 +203,7 @@ export default function AddBankWizard({ file, accounts, onClose, onDone }: {
 
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
-              Remember this layout so future {name || "statements"} import automatically
+              Remember this layout so future {name.trim() ? `${name.trim()} statements` : "statements"} import automatically
             </label>
           </>)}
         </div>

@@ -61,7 +61,10 @@ You can also be invoked with the `/setup` slash command (see
   them (drafts only). Invoices read the client's name/address live from `clients`,
   so editing a shared client row changes every invoice for that client — confirm
   scope before doing it.
-- Before committing: `cd finance-tracker && npx tsc --noEmit && npm run build`
+- Statement import: built-in banks live in `src/lib/parsers/{yesbank,kotak,axis}.ts`; every other bank goes
+  through the data-driven engine in `parsers/generic.ts` ("Add any bank"). Keep a learned format as validated
+  data — never generate or `eval` parser code and never accept a user regex. Run `npm test` after parser/route changes.
+- Before committing: `cd finance-tracker && npx tsc --noEmit && npm test && npm run build`
   (build needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`;
   dummy values are fine) and `bash scripts/scan-secrets.sh` from the repo root.
 - India-specific by design: INR, IST, April–March financial year, Yes/Kotak/Axis

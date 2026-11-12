@@ -177,10 +177,11 @@ appear, and the number looks like `ACME/26-27/0001`.
 
 ## Step 9 — Try the optional modules
 
-- **Reconcile:** *Reconcile → upload statement*. Supported formats today: **Yes
-  Bank** (SpreadsheetML `.xls`), **Kotak** (`.csv`), **Axis** (binary `.xls`).
-  Max 10 MB. Duplicate rows are skipped automatically. Need another bank? See
-  *Adding a bank parser* in the [README](README.md).
+- **Reconcile:** *Reconcile → upload statement*. Yes Bank, Kotak and Axis work
+  out of the box. **Any other bank:** upload a `.csv`/`.xls`/`.xlsx` and Ledger opens
+  **Add a bank** — check the detected columns and preview totals, name the bank, import;
+  it remembers the layout for next time (see [Add any bank](README.md#add-any-bank)).
+  Max 10 MB; duplicate rows are skipped automatically.
 - **Tax:** *Tax → pick a financial year → upload a document*. Files go to a
   **private** storage bucket; only you can open them (via 60-second links).
 - **Demo data (optional):** `finance-tracker/supabase/seed_example.sql` loads
@@ -217,8 +218,9 @@ Visiting `/dashboard` while signed out must bounce you to `/login`.
 - **Backups:** the free tier has no point-in-time recovery. Periodically
   export your data (*Table Editor → Export*, or `pg_dump`) and keep it
   **somewhere private**, never in git.
-- **Updates:** `git pull`, then `npm install` and re-run any *new* SQL that
-  was added to `schema.sql` (the changelog in commit messages says which).
+- **Updates:** `git pull`, then `npm install`, then run any new file in
+  `finance-tracker/supabase/upgrades/` once in the SQL Editor (each is safe to re-run).
+  Installed before **Nov 2026**? Run `upgrades/2026-11-bank-formats.sql` to enable *Add any bank*.
 
 ---
 
@@ -232,6 +234,7 @@ Visiting `/dashboard` while signed out must bounce you to `/login`.
 | Page spins / `ENOTFOUND` / 504 | Supabase project is paused (Step 11) |
 | Blank page, CSP errors in console | `NEXT_PUBLIC_SUPABASE_URL` was missing at **build** time — set it and redeploy |
 | Tax upload fails | Storage policies missing — re-run the **STORAGE** section at the end of `schema.sql` |
+| "Add a bank" says it couldn't save / `bank_formats` error | Run `supabase/upgrades/2026-11-bank-formats.sql` |
 
 ---
 
