@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function ReconciliationPage() {
   const supabase = await supabaseServer();
 
-  const [{ data: triage }, { data: merchants }, { data: imports }, { data: rules }, { data: txns }, { data: incomeEntries }] =
+  const [{ data: triage }, { data: merchants }, { data: imports }, { data: rules }, { data: txns }, { data: incomeEntries }, { data: accounts }, { data: formats }] =
     await Promise.all([
       supabase.from("v_txn_triage").select("*"),
       supabase.from("v_merchant_rollup").select("*").order("total", { ascending: false }).limit(40),
@@ -19,6 +19,8 @@ export default async function ReconciliationPage() {
       // candidates for the income-matching pass
       supabase.from("income_entries").select("id, month, expected, received, income_sources(name)")
         .order("month", { ascending: false }),
+      supabase.from("bank_accounts").select("id, account_name").order("account_name"),
+      supabase.from("bank_formats").select("id, name, created_at").order("created_at", { ascending: false }),
     ]);
 
   return (
@@ -30,6 +32,8 @@ export default async function ReconciliationPage() {
         rules={rules ?? []}
         bigTxns={txns ?? []}
         incomeEntries={incomeEntries ?? []}
+        accounts={accounts ?? []}
+        formats={formats ?? []}
       />
     </Shell>
   );

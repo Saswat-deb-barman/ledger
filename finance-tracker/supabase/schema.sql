@@ -326,6 +326,22 @@ create table public.tax_documents (
 create index on public.tax_documents (owner_id, fin_year);
 
 -- ============================================================================
+--  BANK FORMATS — "Add any bank". A saved column mapping (plain JSON data, never
+--  code) learned from one sample statement, so later files with the same header
+--  are recognised and parsed automatically. See src/lib/parsers/generic.ts.
+-- ============================================================================
+create table public.bank_formats (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null references auth.users(id) on delete cascade,
+  name        text not null check (char_length(name) between 1 and 60),
+  signature   text not null check (char_length(signature) <= 1000),   -- normalised header row
+  config      jsonb not null check (octet_length(config::text) <= 2000),
+  account_id  uuid references public.bank_accounts(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  unique (owner_id, signature)
+);
+
+-- ============================================================================
 --  MONTHLY ROLL-UP VIEW — mirrors the Master Sheet
 -- ============================================================================
 create or replace view public.v_monthly
@@ -365,6 +381,7 @@ alter table public.statement_imports enable row level security;
 alter table public.bank_txns         enable row level security;
 alter table public.tag_rules         enable row level security;
 alter table public.tax_documents     enable row level security;
+alter table public.bank_formats      enable row level security;
 
 create policy own_profiles       on public.profiles       using (id = auth.uid()) with check (id = auth.uid());
 create policy own_clients        on public.clients        using (owner_id = auth.uid()) with check (owner_id = auth.uid());
@@ -386,6 +403,8 @@ create policy own_bank_txns on public.bank_txns
 create policy own_tag_rules on public.tag_rules
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 create policy own_tax_documents on public.tax_documents
+  using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy own_bank_formats on public.bank_formats
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
 -- ============================================================================
