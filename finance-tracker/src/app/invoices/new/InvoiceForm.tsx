@@ -26,10 +26,16 @@ export default function InvoiceForm({
     () => bankAccounts.find(a => a.is_default)?.id ?? bankAccounts[0]?.id ?? "");
   const [saving, setSaving] = useState(false);
 
-  // Personal invoices use your initials; client invoices use client prefix.
+  // Personal invoices use your initials (from your profile name, e.g. "Jane Q Doe"
+  // -> "JQD", or "INV" if the profile has no name); client invoices use the
+  // client's prefix.
+  const initials =
+    String(myProfile?.full_name ?? "")
+      .split(/\s+/).map(w => w[0] ?? "").join("")
+      .toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) || "INV";
   const prefix = clientId
-    ? clients.find(c => c.id === clientId)?.invoice_prefix ?? "INV"
-    : "INV";
+    ? clients.find(c => c.id === clientId)?.invoice_prefix ?? initials
+    : initials;
 
   const visibleProjects = projects.filter(p =>
     clientId ? p.client_id === clientId : p.client_id === null);
