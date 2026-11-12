@@ -1,0 +1,38 @@
+# --- dependencies & build output ---
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# --- secrets: NEVER commit these ---
+.env
+.env.*
+!.env.example
+!.env.local.example
+*.pem
+*.key
+
+# --- personal / local tooling ---
+.DS_Store
+.claude/settings.local.json
+.claude/*.local.*
+.vercel/
+
+# --- real financial data must never be committed ---
+# Bank statements, invoices, tax papers and exports belong on your own disk
+# or in the app's private Supabase Storage bucket — not in git.
+*.xls
+*.xlsx
+*.csv
+*.pdf
+*.ofx
+*.qif
+*.zip
+*.docx
+*.bundle
+statements/
+invoices/
+exports/
+downloads/
+backups/
+*.sql.bak
