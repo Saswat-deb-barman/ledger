@@ -5,6 +5,8 @@ export function extractMerchant(bank: string, desc: string): string {
   const d = (desc || "").trim();
   if (!d) return "(unknown)";
 
+  if (bank === "generic") return genericMerchant(d);
+
   if (bank === "axis") {
     // UPI/P2M/<ref>/MERCHANT NAME/... or UPI/P2A/<ref>/NAME/...
     const m = d.match(/^UPI\/P2[AM]\/\d+\/([^/]+)/i);
@@ -41,4 +43,21 @@ export function extractMerchant(bank: string, desc: string): string {
 
 function clean(s: string): string {
   return s.replace(/\s+/g, " ").trim().replace(/[-.]+$/, "").toUpperCase() || "(unknown)";
+}
+
+// Best-effort counterparty for banks we have no dedicated rules for: drop channel
+// words (UPI/NEFT/IMPS…), reference numbers and VPAs, keep the first name-like part.
+const CHANNEL = /^(UPI|NEFT|RTGS|IMPS|ACH|ECS|NACH|POS|ATM|MB|IB|P2A|P2M|P2P|TO|BY|FROM|CR|DR|TRANSFER|PAYMENT|PURCHASE|DEBIT|CREDIT|CARD)$/i;
+function genericMerchant(d: string): string {
+  const parts = d.split(/[\/|*]+/).map(p => p.trim()).filter(Boolean);
+  for (const raw of parts) {
+    const p = raw.replace(/^(to|by|from)[:\s-]+/i, "").trim();
+    const vpa = p.match(/^([^@\s]+)@[A-Za-z]+$/);
+    const cand = vpa ? vpa[1] : p;
+    if (!/[A-Za-z]{3,}/.test(cand)) continue;           // no real word
+    if (CHANNEL.test(cand)) continue;
+    if (/\d/.test(cand) && cand.replace(/\D/g, "").length >= 6) continue;   // looks like a reference
+    return clean(cand);
+  }
+  return clean(d.slice(0, 24));
 }

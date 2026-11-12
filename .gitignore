@@ -17,6 +17,7 @@ out/
 .claude/settings.local.json
 .claude/*.local.*
 .vercel/
+AGENTS.md
 
 # --- real financial data must never be committed ---
 # Bank statements, invoices, tax papers and exports belong on your own disk
@@ -30,9 +31,9 @@ out/
 *.zip
 *.docx
 *.bundle
-statements/
-invoices/
-exports/
-downloads/
-backups/
+/statements/
+/invoices/
+/exports/
+/downloads/
+/backups/
 *.sql.bak

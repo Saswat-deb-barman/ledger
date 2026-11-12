@@ -30,7 +30,7 @@ scan "Supabase project URL"      'https://[a-z0-9]{20}\.supabase\.co'
 scan "Private key block"         '-----BEGIN [A-Z ]*PRIVATE KEY-----'
 scan "PAN-like identifier"       '(^|[^A-Za-z0-9])[A-Z]{5}[0-9]{4}[A-Z]($|[^A-Za-z0-9])' 'ABCDE1234F|AAAAA0000A'
 scan "GSTIN-like identifier"     '(^|[^A-Za-z0-9])[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]($|[^A-Za-z0-9])' '22AAAAA0000A1Z5'
-scan "IFSC-like code"            '(^|[^A-Za-z0-9])[A-Z]{4}0[A-Z0-9]{6}($|[^A-Za-z0-9])' 'XXXX0000000|YESB0000000'
+scan "IFSC-like code"            '(^|[^A-Za-z0-9])[A-Z]{4}0[A-Z0-9]{6}($|[^A-Za-z0-9])' 'XXXX0000000|YESB0000000|TEST0001234'
 
 # Data files that must never be committed.
 while IFS= read -r f; do

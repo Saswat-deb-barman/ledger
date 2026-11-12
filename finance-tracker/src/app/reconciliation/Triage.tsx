@@ -3,7 +3,8 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { inr, fmtDate, monthLabel } from "@/lib/format";
-import { Upload, ChevronDown, ChevronRight, Tag, Check, X } from "lucide-react";
+import { Upload, ChevronDown, ChevronRight, Tag, Check, X, Trash2 } from "lucide-react";
+import AddBankWizard from "./AddBankWizard";
 
 const TIER_LABEL: Record<string,string> = { small: "Small (<₹2k)", medium: "Medium (₹2k–25k)", large: "Large (>₹25k)" };
 
@@ -17,12 +18,13 @@ async function recomputeEntry(sb: any, entryId: string) {
   await sb.from("income_entries").update({ received, is_received: received > 0 }).eq("id", entryId);
 }
 
-export default function Triage({ triage, merchants, imports, rules, bigTxns, incomeEntries }: any) {
+export default function Triage({ triage, merchants, imports, rules, bigTxns, incomeEntries, accounts, formats }: any) {
   const router = useRouter();
   const [tab, setTab] = useState<"triage" | "merchants" | "history">("triage");
   const [dir, setDir] = useState<"debit" | "credit">("debit");
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState<string>("");
+  const [wizardFile, setWizardFile] = useState<File | null>(null);   // unknown bank → "Add a bank" wizard
 
   const t = (tier: string, d: string) =>
     triage.find((x: any) => x.tier === tier && x.direction === d) ?? { n: 0, total: 0 };
@@ -50,8 +52,9 @@ export default function Triage({ triage, merchants, imports, rules, bigTxns, inc
     setUploading(true); setMsg("");
     const fd = new FormData(); fd.append("file", file);
     const res = await fetch("/api/statements/upload", { method: "POST", body: fd });
-    const j = await res.json();
+    const j = await res.json().catch(() => ({ error: "Unexpected response from the server." }));
     setUploading(false);
+    if (res.status === 422 && j.code === "unknown_format") { setWizardFile(file); return; }
     setMsg(res.ok
       ? `${j.bank} · ${j.inserted} new, ${j.duplicates} duplicates skipped`
       : `Error: ${j.error}`);
@@ -67,11 +70,16 @@ export default function Triage({ triage, merchants, imports, rules, bigTxns, inc
         </div>
         <label className="rounded-xl bg-ink text-paper px-4 py-2.5 text-sm font-medium cursor-pointer inline-flex items-center gap-2">
           <Upload size={15} /> {uploading ? "Parsing…" : "Upload statement"}
-          <input type="file" accept=".xls,.csv,.CSV" className="hidden"
-            onChange={e => e.target.files?.[0] && upload(e.target.files[0])} />
+          <input type="file" accept=".xls,.xlsx,.csv,.CSV,.txt" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
         </label>
       </header>
       {msg && <div className="card p-3 mb-4 text-sm">{msg}</div>}
+      {wizardFile && (
+        <AddBankWizard file={wizardFile} accounts={accounts}
+          onClose={() => setWizardFile(null)}
+          onDone={m => { setWizardFile(null); setMsg(m); router.refresh(); }} />
+      )}
 
       <div className="flex gap-1 mb-6 border-b border-line">
         {(["triage", "merchants", "history"] as const).map(x => (
@@ -106,7 +114,7 @@ export default function Triage({ triage, merchants, imports, rules, bigTxns, inc
       )}
 
       {tab === "merchants" && <Merchants merchants={merchants} dir={dir} setDir={setDir} rules={rules} onRule={() => router.refresh()} />}
-      {tab === "history" && <History imports={imports} />}
+      {tab === "history" && <History imports={imports} formats={formats} onChanged={() => router.refresh()} />}
     </>
   );
 }
@@ -230,8 +238,27 @@ function Merchants({ merchants, dir, setDir, rules, onRule }: any) {
   );
 }
 
-function History({ imports }: any) {
+function History({ imports, formats, onChanged }: any) {
+  const removeFormat = async (f: any) => {
+    if (!confirm(`Forget the saved format "${f.name}"? Existing transactions are kept; the next ${f.name} file will ask you to map it again.`)) return;
+    await supabaseBrowser().from("bank_formats").delete().eq("id", f.id);
+    onChanged();
+  };
   return (
+    <>
+    {formats?.length > 0 && (
+      <div className="card divide-y divide-line mb-5">
+        <div className="p-4 eyebrow">Banks you&apos;ve added</div>
+        {formats.map((f: any) => (
+          <div key={f.id} className="flex items-center gap-4 p-4">
+            <div className="flex-1 text-sm font-medium">{f.name}
+              <span className="text-xs text-muted font-normal ml-2">added {fmtDate(f.created_at)}</span></div>
+            <button onClick={() => removeFormat(f)} title="Forget this format"
+              className="p-2 rounded-lg text-muted hover:text-outflow hover:bg-line/50"><Trash2 size={15} /></button>
+          </div>
+        ))}
+      </div>
+    )}
     <div className="card divide-y divide-line">
       {imports.length === 0 && <div className="p-6 text-center text-sm text-muted">No statements uploaded yet.</div>}
       {imports.map((im: any) => (
@@ -249,5 +276,6 @@ function History({ imports }: any) {
         </div>
       ))}
     </div>
+    </>
   );
 }

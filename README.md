@@ -27,7 +27,7 @@ document you generate when you need one, not the thing everything hangs off.
 | **Invoices** | Gap-free numbering per client per financial year (`ACME/26-27/0001`), draft → sent → paid flow, PDF export, only drafts can be deleted. |
 | **Clients & Projects** | Optional invoice prefix, GSTIN/PAN, billing address; projects roll up billed-so-far. |
 | **Bank accounts** | Your accounts — used for invoice "pay to" details and as statement targets. |
-| **Reconcile** | Upload a bank statement → de-duplicated transactions → triage (small / medium / large), tag rules, and **match bank credits to expected income**. |
+| **Reconcile** | Upload a bank statement → de-duplicated transactions → triage (small / medium / large), tag rules, and **match bank credits to expected income**. Yes Bank, Kotak and Axis work out of the box; for **any other bank**, upload one sample statement and Ledger [learns its layout](#add-any-bank). |
 | **Tax** | Financial-year-organised document vault for your CA (private storage, short-lived download links, "added by me / CA" marker). |
 
 ## Install it (about 30 minutes)
@@ -95,23 +95,40 @@ finance-tracker/
 Using it elsewhere means changing those places. PRs that make currency and
 fiscal year configurable are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Adding a bank parser
+## Add any bank
 
-1. Add `src/lib/parsers/<bank>.ts` exporting `parse<Bank>(input, fileName): ParsedStatement`
-   (see `types.ts` — each transaction needs a date, description, amount,
-   direction `credit|debit`, optional reference and balance).
-2. Teach `parseStatement()` in `src/lib/parsers/index.ts` to **detect** the
-   format from file *content* (don't rely on the file name alone) and dispatch.
-3. Add the bank to `BANK_NAME` in `src/app/api/statements/upload/route.ts`.
-4. Test with a **synthetic** file. Never commit a real statement.
+Not on Yes / Kotak / Axis? You don't need a developer:
+
+1. **Reconcile → Upload statement** with a `.csv`, `.xls` or `.xlsx` from your bank.
+2. Ledger doesn't recognise it, so it opens **Add a bank**: it detects the header row,
+   the date / description / debit / credit / amount / balance columns, the date order
+   and whether money in/out is separate columns, a signed amount or a Dr/Cr marker.
+3. You get a **preview with totals** to check against your statement, and dropdowns to
+   fix anything it got wrong. Name the bank and import.
+4. The layout is saved, so the **next file from that bank imports automatically**
+   (manage them under *Upload history → Banks you've added*).
+
+It works by saving a small *column mapping* (plain data) — nothing is generated or
+executed, and your statement never leaves your own server and Supabase project.
+Duplicate rows are skipped across overlapping uploads.
+
+**Existing install?** Run `finance-tracker/supabase/upgrades/2026-11-bank-formats.sql` once
+in the Supabase SQL Editor (fresh installs get it from `schema.sql`).
+
+**For contributors:** the engine is `src/lib/parsers/generic.ts` (tests in
+`generic.test.ts`). The three built-in banks keep dedicated parsers in the same folder;
+a dedicated parser is only worth adding for formats the generic engine can't express
+(e.g. a layout where account details sit in odd places). Test with a **synthetic** file —
+never commit a real statement.
 
 ## Known limitations
 
 - Single-user by design (one owner per data set; no teams or roles).
 - INR/IST/April–March only; no multi-currency invoices.
+- **Statements must be CSV / XLS / XLSX.** PDF-only statements aren't supported (ask your bank for a CSV/Excel export). Only the first sheet is read, decimals must use `.` (not `1.234,56`), and one file = one account.
 - No profile-editing screen yet (profile fields are set via SQL — see INSTALL Step 8).
 - Supabase's free tier auto-pauses after ~7 days of inactivity (INSTALL Step 11).
-- No automated test suite yet; CI runs typecheck, build, audit and a secret scan.
+- Tests cover the statement parsers and import routes (`npm test`); there are no UI tests yet. CI also runs typecheck, build, audit and a secret scan.
 
 ## License
 

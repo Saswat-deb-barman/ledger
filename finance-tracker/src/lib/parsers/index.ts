@@ -5,6 +5,9 @@ import { parseYesBank } from "./yesbank";
 
 export * from "./types";
 export { extractMerchant } from "./merchant";
+export * from "./generic";
+
+export class UnknownFormatError extends Error {}
 
 // Detect bank from file content + name, then dispatch to the right adapter.
 export function parseStatement(fileName: string, buf: Buffer): ParsedStatement {
@@ -20,5 +23,5 @@ export function parseStatement(fileName: string, buf: Buffer): ParsedStatement {
   if (buf[0] === 0xD0 && buf[1] === 0xCF) return parseAxis(buf, fileName);
   if (/AcctStatement/i.test(fileName)) return parseAxis(buf, fileName);
 
-  throw new Error(`Could not detect bank format for ${fileName}`);
+  throw new UnknownFormatError(`Could not detect bank format for ${fileName}`);
 }

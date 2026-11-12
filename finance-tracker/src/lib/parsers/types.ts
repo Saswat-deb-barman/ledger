@@ -6,10 +6,12 @@ export type RawTxn = {
   amount: number;        // always positive
   direction: "credit" | "debit";
   balance: number | null;
+  seq?: number;          // occurrence index for identical rows when there is no balance column
 };
 
 export type ParsedStatement = {
-  bank: "yes" | "axis" | "kotak";
+  bank: string;                 // "yes" | "axis" | "kotak", or the user's own format name
+  custom?: boolean;             // true when parsed with a user-defined (generic) format
   account_no: string | null;
   ifsc: string | null;
   account_label: string;
@@ -28,6 +30,7 @@ export function tierOf(amount: number): "small" | "medium" | "large" {
 
 // Stable fingerprint for dedupe: account + date + amount + balance.
 export function fingerprint(account_no: string | null, t: RawTxn): string {
-  return [account_no ?? "?", t.txn_date, t.amount.toFixed(2),
+  const base = [account_no ?? "?", t.txn_date, t.amount.toFixed(2),
           t.balance?.toFixed(2) ?? "?", t.direction].join("|");
+  return t.seq !== undefined ? `${base}|#${t.seq}` : base;
 }

@@ -20,6 +20,7 @@ Never test against someone else's data.
 ```bash
 cd finance-tracker
 npx tsc --noEmit
+npm test
 NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy npm run build
 cd .. && bash scripts/scan-secrets.sh
 ```
@@ -33,7 +34,7 @@ cd .. && bash scripts/scan-secrets.sh
 - API routes must authenticate and validate input themselves.
 - Keep India-specific assumptions explicit and documented; PRs that make
   currency / fiscal year configurable are very welcome.
-- New bank parsers: see *Adding a bank parser* in the README, and test with a synthetic file.
+- New banks usually need no code — the *Add a bank* wizard handles them (see the README). Improve `src/lib/parsers/generic.ts` for layouts it can't express, with a test using a **synthetic** file.
 - Keep dependencies few and current; explain any new one in the PR.
 
 ## Reporting security issues
